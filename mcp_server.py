@@ -13,8 +13,7 @@ USERNAME = "testuser"
 PASSWORD = "testpassword123"
 
 def get_auth_token():
-    # Make a request to the auth token endpoint. 
-    # Depending on how the midterm was implemented, we assume standard OAuth2 form-data
+    # Make a request to the auth token endpoint.
     response = httpx.post(
         f"{GATEWAY_URL}/api/v1/auth/token",
         data={"username": USERNAME, "password": PASSWORD},
@@ -47,7 +46,7 @@ def fetch_flights(params: dict, label: str) -> List[str]:
     local_params = params.copy()
     
     try:
-        # Gemini Safety: Limit to 5 pages (50 flights) to prevent context bloating
+        # Safety: Limit to 5 pages (50 flights) to prevent context bloating
         for _ in range(5):
             local_params["skip"] = current_skip
             response = httpx.get(f"{GATEWAY_URL}/api/v1/flights", params=local_params, timeout=10.0, follow_redirects=True)
