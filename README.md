@@ -13,7 +13,7 @@ This project is built using a modern **Service-Oriented Architecture (SOA)**, se
 
 1.  **Intelligence Layer (Local)**: Powered by **Llama 3.2 (3B)** via Ollama. It orchestrates user requests through a custom **FastAPI Agent**.
 2.  **Tooling Layer (Local)**: A custom **MCP (Model Context Protocol)** server (`mcp_server.py`) acts as a secure adapter, translating AI intents into API calls.
-3.  **Service Layer (Cloud)**: The agent connects to a production-ready **Azure-hosted Airline API Gateway**. This backend has been specifically optimized for the final submission to resolve historical SQL performance issues and data integrity bugs.
+3.  **Service Layer (Cloud)**: The agent connects to a production-ready **Azure-hosted Airline API Gateway**. This backend is connected to a scalable **Neon (PostgreSQL)** database, optimized to handle complex flight queries and transactional integrity.
 4.  **UI Layer**: A modern Chat interface built with **React** for seamless user interaction.
 
 ---
@@ -24,7 +24,7 @@ To ensure a robust user experience and 100% data integrity, we implemented the f
 - **Directional Search**: Round-trip requests perform two atomic searches (Outbound/Return) to prevent AI hallucination over flight legs.
 - **Zero-Tolerance Hallucination**: The system prompt enforces a "Data-Only" policy. If the API doesn't provide it, the AI is forbidden from making it up.
 - **Explicit Approval Flow**: All transactional actions (Booking/Check-in) require a final user "YES" confirmation to ensure accuracy.
-- **Cloud Synchronization**: Every search is performed in real-time against the live Azure database.
+- **Cloud Synchronization**: Every search is performed in real-time against the live Azure/Neon cloud stack.
 
 ---
 
@@ -44,8 +44,6 @@ To ensure a robust user experience and 100% data integrity, we implemented the f
    - **Windows**: Run `run.bat`
    - **Mac/Linux**: Run `bash run.sh`
 
-*The system will automatically connect to the Azure Gateway URL.*
-
 ---
 
 ## 🧪 Presentation Test Cases
@@ -59,4 +57,5 @@ To ensure a robust user experience and 100% data integrity, we implemented the f
 ## 🔗 Resources
 - **Model**: Llama3.2 (3B)
 - **Stack**: LangChain, FastAPI, FastMCP, React
-- **Cloud Backend**: Azure App Service (Azure SQL Database)
+- **Cloud Backend**: Azure App Service
+- **Database**: Neon (PostgreSQL)
