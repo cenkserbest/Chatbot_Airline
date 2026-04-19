@@ -47,9 +47,9 @@ def fetch_flights(params: dict, label: str) -> List[str]:
     local_params = params.copy()
     
     try:
-        while True:
+        # Gemini Safety: Limit to 5 pages (50 flights) to prevent context bloating
+        for _ in range(5):
             local_params["skip"] = current_skip
-            # Internal server always ignores is_round_trip if we are doing manual passes
             response = httpx.get(f"{GATEWAY_URL}/api/v1/flights", params=local_params, timeout=10.0, follow_redirects=True)
             
             if response.status_code == 200:
@@ -71,7 +71,7 @@ def fetch_flights(params: dict, label: str) -> List[str]:
 def search_flights(
     airport_from: Optional[str] = None,
     airport_to: Optional[str] = None,
-    date_from: Optional[str] = None, # ISO format date
+    date: Optional[str] = None, # ISO format date 'YYYY-MM-DD'
     date_to: Optional[str] = None, # ISO format date
     number_of_people: int = 1,
     is_round_trip: bool = False
@@ -85,7 +85,7 @@ def search_flights(
     airport_from = airport_from.upper() if airport_from else None
     airport_to = airport_to.upper() if airport_to else None
     
-    if not airport_from or not airport_to or not date_from:
+    if not airport_from or not airport_to or not date:
         return "CRITICAL ERROR: Missing required search information (Departure Airport, Destination Airport, or Date). Please ask the user for these missing details instead of searching."
     
     if is_round_trip and not date_to:
@@ -98,7 +98,7 @@ def search_flights(
     }
     if airport_from: outbound_params["airport_from"] = airport_from
     if airport_to: outbound_params["airport_to"] = airport_to
-    if date_from: outbound_params["date_from"] = date_from
+    if date: outbound_params["date_from"] = date
     
     labeled_flights = fetch_flights(outbound_params, "[OUTBOUND/GİDİŞ]")
     
@@ -117,7 +117,7 @@ def search_flights(
         labeled_flights.extend(return_flights)
 
     if not labeled_flights:
-        search_info = f"{airport_from} to {airport_to} on {date_from}"
+        search_info = f"{airport_from} to {airport_to} on {date}"
         if is_round_trip and date_to:
             search_info += f" and return on {date_to}"
         return f"No flights found for {search_info}. Tell the user exactly which date and route you searched."
@@ -128,7 +128,7 @@ def search_flights(
 @mcp.tool()
 def book_flight(
     flight_number: str,
-    flight_date: str,
+    date: str,
     passenger_names: List[str]
 ) -> str:
     """
@@ -142,7 +142,7 @@ def book_flight(
         
     payload = {
         "flight_number": flight_number,
-        "date": flight_date,
+        "date": date,
         "passeger_names": passenger_names  # Note the spelling matches the schema
     }
     
@@ -160,17 +160,17 @@ def book_flight(
 def check_in(
     ticket_number: str,
     flight_number: str,
-    flight_date: str,
+    date: str,
     passenger_name: str
 ) -> str:
     """
-    Check-in for a flight. Requires ticket_number, flight_number, flight_date ('YYYY-MM-DD'), and passenger_name.
+    Check-in for a flight. Requires ticket_number, flight_number, date ('YYYY-MM-DD'), and passenger_name.
     Returns the transaction status and assigned seat.
     """
     payload = {
         "ticket_number": ticket_number,
         "flight_number": flight_number,
-        "date": flight_date,
+        "date": date,
         "passenger_name": passenger_name
     }
     

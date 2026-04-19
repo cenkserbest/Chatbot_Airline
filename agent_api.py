@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -63,55 +64,69 @@ app.add_middleware(
 @tool
 async def get_all_flights(skip: int = 0) -> str:
     """Call this tool IMMEDIATELY when the user asks to list all flights or see all flights."""
-    args = {"number_of_people": 1, "is_round_trip": False, "skip": skip}
+    args = {"number_of_people": 1, "is_round_trip": False}
     result = await mcp_session.call_tool("search_flights", arguments=args)
     return str(result.content)
 
 @tool
-async def search_flights(airport_from: Optional[str] = None, airport_to: Optional[str] = None, date_from: Optional[str] = None, date_to: Optional[str] = None, number_of_people: int = 1, is_round_trip: bool = False, skip: int = 0) -> str:
+async def search_flights(airport_from: Optional[str] = None, airport_to: Optional[str] = None, date: Optional[str] = None, date_to: Optional[str] = None, number_of_people: int = 1, is_round_trip: bool = False) -> str:
     """Use this tool ONLY if the user specifically provides SOME filtering criteria (like airport locations OR dates) to search."""
+    
+    # Gemini Safety Guard: Prevent early call without airports
+    if not airport_from or not airport_to or not date:
+        return "REJECTION: I am missing required search data (airports or date). Please ask the user politely for the departure airport, arrival airport, and date."
+
     args = {
         "number_of_people": number_of_people,
-        "is_round_trip": is_round_trip,
-        "skip": skip
+        "is_round_trip": is_round_trip
     }
     if airport_from:
         args["airport_from"] = airport_from
     if airport_to:
         args["airport_to"] = airport_to
-    if date_from:
-        args["date_from"] = date_from
+    if date:
+        args["date"] = date
     if date_to:
         args["date_to"] = date_to
     result = await mcp_session.call_tool("search_flights", arguments=args)
     return str(result.content)
 
 @tool
-async def book_flight(flight_number: str, flight_date: str, passenger_names: List[str]) -> str:
-    """Book a flight ticket. REQUIRES flight_number, flight_date (YYYY-MM-DD), and passenger_names."""
+async def book_flight(flight_number: str, date: str, passenger_names: List[str]) -> str:
+    """Book a flight ticket. REQUIRES flight_number, date (YYYY-MM-DD), and passenger_names."""
     
     # Sanitize inputs
-    cl_date = flight_date.split(" ")[0].split("T")[0].strip()
+    cl_date = date.split(" ")[0].split("T")[0].strip()
     
     args = {
         "flight_number": flight_number.replace(" ", "").upper(),
-        "flight_date": cl_date,
+        "date": cl_date,
         "passenger_names": passenger_names
     }
     result = await mcp_session.call_tool("book_flight", arguments=args)
     return str(result.content)
 
 @tool
-async def check_in(ticket_number: str, flight_number: str, flight_date: str, passenger_name: str) -> str:
-    """Perform a check-in. REQUIRES ticket_number, flight_number, flight_date (YYYY-MM-DD), and passenger_name."""
+async def check_in(ticket_number: str, flight_number: str, date: str, passenger_name: str) -> str:
+    """Perform a check-in. REQUIRES ticket_number, flight_number, date (YYYY-MM-DD), and passenger_name."""
     
+    # Gemini Safety Guard: Prevent early call with missing data
+    missing = []
+    if not ticket_number or "unknown" in ticket_number.lower(): missing.append("ticket_number")
+    if not flight_number or "unknown" in flight_number.lower(): missing.append("flight_number")
+    if not date or "unknown" in date.lower(): missing.append("date")
+    if not passenger_name or "unknown" in passenger_name.lower(): missing.append("passenger_name")
+    
+    if missing:
+        return f"REJECTION: I am missing {', '.join(missing)}. Please ask the user for these specific details politely."
+
     # Sanitize inputs for weak LLM capabilities
-    cl_date = flight_date.split(" ")[0].split("T")[0].strip()
+    cl_date = date.split(" ")[0].split("T")[0].strip()
     
     args = {
         "ticket_number": ticket_number.replace(" ", "").upper(),
         "flight_number": flight_number.replace(" ", "").upper(),
-        "flight_date": cl_date,
+        "date": cl_date,
         "passenger_name": passenger_name.strip()
     }
     result = await mcp_session.call_tool("check_in", arguments=args)
@@ -119,38 +134,41 @@ async def check_in(ticket_number: str, flight_number: str, flight_date: str, pas
 
 tools = [get_all_flights, search_flights, book_flight, check_in]
 
-system_message = SystemMessage(content="""You are an Airline Assistant. Speak ONLY in English.
-You have 4 tools: get_all_flights, search_flights, book_flight, check_in.
+def get_system_message():
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    return SystemMessage(content=f"""You are a helpful and professional Airline Assistant. Today's date is {current_date}. 
 
-You are a TOOL EXECUTION ENGINE. You are FORBIDDEN from generating your own flight data, ticket numbers, or success messages.
+Your goal is to assist customers with flight searches, bookings, and check-ins. Be polite, natural, and efficient. 
 
-ACTION MAPPINGS:
-- USER: "Buy/Book" -> CALL tool: book_flight(flight_number, passenger_name, date)
-- USER: "Check in" -> CALL tool: check_in(ticket_number, passenger_name, flight_number, date)
-- USER: "Find/Search" -> CALL tool: search_flights(airport_from, airport_to, date_from)
+INTENT GUIDELINES:
+- **Search**: Before searching, naturally find out if they want a **Round-Trip** or **One-Way**. 
+  - If One-Way: You need Departure Airport, Destination Airport, and Date.
+  - If Round-Trip: You need Departure Airport, Destination Airport, Departure Date, and Return Date.
+- **Booking**: You need Flight Number, Passenger Name(s), and Date.
+- **Check-in**: You need Ticket Number, Passenger Name, Flight Number, and Date. Do NOT assume a name; always ask/confirm. Do NOT use today's date for a booking unless explicitly asked.
 
 STRICT RULES:
-1. NO TOOL OUTPUT = NO DATA. 
-2. NEVER mention technical names (skip, parameter, date_to, json).
-3. If data is missing (e.g. "Which airport?"), ask briefly and STOP.
-4. Report Tool Results LITERALLY. 
+1. NO PREMATURE CALLS: Do not call a tool until you have all the required information for that specific task. If data is missing, ask for it in a polite, conversational way.
+2. DATA INTEGRITY: You are a TOOL EXECUTION ENGINE. Do not invent flight data or success messages. Only report what the tools return.
+3. CONTEXT: Stay focused on the user's current request. Do not switch from check-in to searching unless asked.
 
-DO NOT ROLEPLAY. EXECUTE THE TOOL OR ASK FOR MISSING DATA.
+Be concise but friendly.
 """)
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
     session_id = request.session_id
     if session_id not in sessions:
-        sessions[session_id] = [system_message]
+        sessions[session_id] = []
         
     history = sessions[session_id]
     history.append(HumanMessage(content=request.message))
     
-    # Always keep system message at the top
-    full_history = [system_message] + history
+    # Gemini Optimization: Dynamic System Message + Sliding Window (last 40 messages for stability)
+    current_system_message = get_system_message()
+    full_history = [current_system_message] + history[-40:]
     
-    llm = ChatOllama(model="llama3.2")
+    llm = ChatOllama(model="llama3.1")
     llm_with_tools = llm.bind_tools(tools)
     
     try:
@@ -175,7 +193,8 @@ async def chat(request: ChatRequest):
                 
                 history.append(ToolMessage(tool_call_id=tool_call["id"], content=result_content))
                 
-            response = await llm_with_tools.ainvoke([system_message] + history)
+            # Keep history context stable
+            response = await llm_with_tools.ainvoke([current_system_message] + history[-40:])
             history.append(response)
 
         final_content = response.content
