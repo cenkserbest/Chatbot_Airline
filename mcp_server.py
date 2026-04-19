@@ -74,8 +74,7 @@ def search_flights(
     date_from: Optional[str] = None, # ISO format date
     date_to: Optional[str] = None, # ISO format date
     number_of_people: int = 1,
-    is_round_trip: bool = False,
-    skip: int = 0
+    is_round_trip: bool = False
 ) -> str:
     """
     Search for available flights. Returns a list of flights matching the criteria.
@@ -95,8 +94,7 @@ def search_flights(
     # LEG 1: Outbound
     outbound_params = {
         "number_of_people": number_of_people,
-        "is_round_trip": "false", # We always do single passes from here
-        "skip": skip
+        "is_round_trip": "false" # We always do single passes from here
     }
     if airport_from: outbound_params["airport_from"] = airport_from
     if airport_to: outbound_params["airport_to"] = airport_to
@@ -108,8 +106,7 @@ def search_flights(
     if is_round_trip and date_to:
         inbound_params = {
             "number_of_people": number_of_people,
-            "is_round_trip": "false",
-            "skip": 0 # Return leg usually starts fresh skip or can be tweaked
+            "is_round_trip": "false"
         }
         # Swap airports for return leg
         if airport_to: inbound_params["airport_from"] = airport_to
