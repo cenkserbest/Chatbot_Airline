@@ -11,13 +11,21 @@ This repository contains the **Airline AI Agent**, a professional-grade implemen
 
 This project is built using a modern **Service-Oriented Architecture (SOA)**, cleanly separating the intelligence layer from the data layer:
 
-1.  **Intelligence Layer (Local)**: Powered by **Llama 3.1 (8B)** via Ollama. Orchestrates user requests through a custom **FastAPI** agent with tool-calling capabilities.
-2.  **Tooling Layer (Local — MCP)**: A custom **Model Context Protocol (MCP)** server (`mcp_server.py`) acts as a secure adapter, translating AI intents into structured REST API calls.
-3.  **Service Layer (Cloud)**: The agent connects to a production-ready **Azure-hosted Airline API Gateway** (`airline-api-gateway`). This backend is connected to a scalable **Neon (PostgreSQL)** cloud database.
-4.  **UI Layer**: A modern, responsive chat interface built with **React** communicates with the agent via a `/chat` REST endpoint.
+1.  **Intelligence Layer (Local — port 8001)**: Powered by **Llama 3.1 (8B)** via Ollama. A **FastAPI** agent receives chat messages and uses LangChain to bind the LLM to MCP tools. The LLM acts as the true **orchestrator** — it decides which tool to call and when, following a ReAct (Reason + Act) pattern.
+2.  **Tooling Layer (Local — port 8002)**: A **standalone MCP (Model Context Protocol) Server** (`mcp_server.py`) runs as an independent HTTP/SSE service. The agent connects to it over the network, and the LLM calls its tools to perform real actions.
+3.  **Service Layer (Cloud)**: The MCP server connects to a production-ready **Azure-hosted Airline API Gateway**, which is backed by a **Neon (PostgreSQL)** cloud database.
+4.  **UI Layer**: A modern, responsive chat interface built with **React** (port 5173).
 
 ```
-[User (React UI)] ←→ [FastAPI Agent (LangChain + Llama 3.1)] ←→ [MCP Server] ←→ [Azure API Gateway] ←→ [Neon DB]
+[User (React :5173)]
+       ↓
+[FastAPI Agent :8001]  ←→  [Llama 3.1 via Ollama]
+       ↓  (HTTP/SSE)
+[MCP Server :8002]
+       ↓  (HTTPS REST)
+[Azure API Gateway]
+       ↓
+[Neon PostgreSQL DB]
 ```
 
 ---

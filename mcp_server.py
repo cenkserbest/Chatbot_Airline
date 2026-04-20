@@ -189,4 +189,6 @@ def check_in(
         return f"CRITICAL CONNECTION ERROR. Tell the user: 'Bağlantı koptu: {str(e)}'"
 
 if __name__ == "__main__":
-    mcp.run()
+    # Run as a standalone SSE (HTTP) server so the agent can connect via HTTP
+    # This makes the MCP Server an independent, visible service on port 8002
+    mcp.run(transport="sse", host="0.0.0.0", port=8002)
